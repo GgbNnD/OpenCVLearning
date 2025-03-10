@@ -2,12 +2,7 @@ import cv2
 import numpy as np
 
 
-def imag_process(imag_path):
-
-    # 1. 读取图像（BGR格式）
-    img = cv2.imread(imag_path)
-    if img is None:
-        raise FileNotFoundError("图像路径错误！")
+def imag_process(img):
 
     # 2. 分离通道（B, G, R）
     b, g, r = cv2.split(img)
@@ -32,12 +27,7 @@ def imag_process(imag_path):
 
     return contours
 
-def draw_contours(imag_path, contours):
-
-    # 1. 读取图像（BGR格式）
-    img = cv2.imread(imag_path)
-    if img is None:
-        raise FileNotFoundError("图像路径错误！")
+def draw_contours(img, contours):
 
     # 在原图上绘制轮廓
     output_image = img.copy()
@@ -84,7 +74,31 @@ def select_arrow(contours):
         selected_contours.append(cnt)
     return selected_contours
 
+def video_process(video_path):
+    cap = cv2.VideoCapture(video_path)
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        contours = imag_process(frame)
+        selected_contours = select_arrow(contours)
+        
+        output_image = frame.copy()
+        cv2.drawContours(output_image, selected_contours, -1, (0, 255, 0), 1)  # 绿色轮廓，线宽为1
+        cv2.imshow('Contours on Image', output_image)
+        if cv2.waitKey(10) & 0xFF == 27:
+            break
+    cap.release()
+    cv2.destroyAllWindows()
+
 img_path = "AutoExchange\station_red.png"
-contours = imag_process(img_path)
+# 读取图像（BGR格式）
+img = cv2.imread(img_path)
+if img is None:
+    raise FileNotFoundError("图像路径错误！")
+contours = imag_process(img)
 selected_contours = select_arrow(contours)
-draw_contours(img_path, selected_contours)
+draw_contours(img, selected_contours)
+
+video_path = "AutoExchange\data\station_redled.mp4"
+video_process(video_path)
