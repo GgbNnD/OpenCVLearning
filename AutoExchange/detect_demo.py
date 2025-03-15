@@ -8,22 +8,22 @@ def imag_process(img):
     b, g, r = cv2.split(img)
 
     # 3. 叠加红蓝通道（使用cv2.add避免溢出）
-    combined = cv2.add(r, b)  # 或者：combined = r + b（但可能溢出）
+    combined = r  # 或者：combined = r + b（但可能溢出）
 
     #高斯模糊
 
-    blurred = cv2.GaussianBlur(combined, (5, 5), 0)
+    blurred = cv2.GaussianBlur(combined, (3, 3), 0)
 
     # 4. 二值化处理（调整阈值以适应实际需求）
     threshold_value = 200  # 可根据需要调整阈值（如100、150等）
     _, binary = cv2.threshold(blurred, threshold_value, 255, cv2.THRESH_BINARY)
 
     # 形态学处理（膨胀腐蚀）
-    kernel = np.ones((3, 3), np.uint8)
-    opened = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel)
-    closed = cv2.morphologyEx(opened, cv2.MORPH_CLOSE, kernel)
+    #kernel = np.ones((1, 1), np.uint8)
+    #opened = cv2.morphologyEx(binary, cv2.MORPH_OPEN, kernel)
+    #closed = cv2.morphologyEx(opened, cv2.MORPH_CLOSE, kernel)
 
-    contours, _ = cv2.findContours(closed, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    contours, _ = cv2.findContours(binary, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
 
     return contours
 
@@ -43,27 +43,32 @@ def draw_contours(img, contours):
 
 def select_arrow(contours):
     # 参数设置
-    min_area = 500        # 最小面积阈值
+    min_area = 200        # 最小面积阈值
     max_area = 1000       # 最大面积阈值
     min_aspect_ratio = 1.1  # 最小长宽比（细长轮廓）
-    max_aspect_ratio = 2.5  # 最大长宽比（短胖轮廓）
+    max_aspect_ratio = 4.5  # 最大长宽比（短胖轮廓）
 
     selected_contours = []
     for cnt in contours:
         # 1. 过滤面积
         area = cv2.contourArea(cnt)
+        print(area)
         if area < min_area or area > max_area:
             continue
 
         # 2. 计算最小外接矩形
         rect = cv2.minAreaRect(cnt)
         width, height = rect[1]
-        aspect_ratio = max(width, height) / min(width, height)
-
+        if(min(width, height) != 0):
+            aspect_ratio = max(width, height) / min(width, height)
+            print(aspect_ratio)
+        else:
+            aspect_ratio = 0
+#
         # 3. 检查长宽比
         if aspect_ratio < min_aspect_ratio or aspect_ratio > max_aspect_ratio:
             continue
-
+#
         # 4. 检查近似轮廓
         epsilon = 0.02 * cv2.arcLength(cnt, True)
         approx = cv2.approxPolyDP(cnt, epsilon, True)
@@ -71,11 +76,43 @@ def select_arrow(contours):
         if len(approx) <3 or len(approx) > 6:
             continue
 
+        # 5.检查角度
+        big_angle_count = 0
+        small_angle_count = 0
+        #获取角度
+        for i in range(len(approx)):
+            # 获取当前点和前后点
+            pt1 = approx[i][0]
+            pt2 = approx[(i + 1) % len(approx)][0]
+            pt3 = approx[(i - 1) % len(approx)][0]
+            # 计算向量
+            vec1 = pt2 - pt1
+            vec2 = pt3 - pt1
+            # 计算角度
+            angle = np.arctan2(vec2[1], vec2[0]) - np.arctan2(vec1[1], vec1[0])
+            angle = np.degrees(angle)  # 转换为度数
+            while(angle<0):
+                angle = angle + 360
+            while(angle>360):
+                angle = angle - 360
+            angle = 360 - angle if angle > 180 else angle
+            print("angle",angle)
+            if 90<angle<150:
+                big_angle_count = big_angle_count + 1
+            if 0<angle<45:
+                small_angle_count = small_angle_count + 1
+        print("big_angle_cout:",big_angle_count)
+        print("small_angle_cout:",small_angle_count)        
+        if big_angle_count < 2 or small_angle_count < 2:
+                continue
+
         selected_contours.append(cnt)
     return selected_contours
 
 def video_process(video_path):
     cap = cv2.VideoCapture(video_path)
+    cv2.namedWindow("frame", 0)
+    cv2.resizeWindow("frame", 1600, 640)
     while True:
         ret, frame = cap.read()
         if not ret:
@@ -85,20 +122,20 @@ def video_process(video_path):
         
         output_image = frame.copy()
         cv2.drawContours(output_image, selected_contours, -1, (0, 255, 0), 1)  # 绿色轮廓，线宽为1
-        cv2.imshow('Contours on Image', output_image)
+        cv2.imshow('frame', output_image)
         if cv2.waitKey(10) & 0xFF == 27:
             break
     cap.release()
     cv2.destroyAllWindows()
 
-img_path = "AutoExchange\station_red.png"
+img_path = "AutoExchange\station_red2.png"
 # 读取图像（BGR格式）
 img = cv2.imread(img_path)
 if img is None:
     raise FileNotFoundError("图像路径错误！")
 contours = imag_process(img)
-selected_contours = select_arrow(contours)
-draw_contours(img, selected_contours)
+#selected_contours = select_arrow(contours)
+draw_contours(img, contours)
 
-video_path = "AutoExchange\data\station_redled.mp4"
-video_process(video_path)
+#video_path = "AutoExchange\data\红方兑换站（侧面视角）.mp4"
+#video_process(video_path)
